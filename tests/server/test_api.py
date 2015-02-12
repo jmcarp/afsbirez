@@ -15,7 +15,6 @@ import pytest
 import six
 from jsonschema import Draft4Validator
 from tests.factories import UserFactory
-from werkzeug.routing import ValidationError
 
 @pytest.fixture
 def user(db):
@@ -72,125 +71,10 @@ class TestAPI:
         assert 'token' in resp.json
         return resp.json['token']
 
-    @pytest.mark.usefixtures('db')
-    def test_topic_search_accurate(self, db, testapi):
-        resp = testapi.get('/api/tests/topics?q=security')
+    def test_topic_search(self, testapi):
+        resp = testapi.get('/api/tests/topics?q=KC-135')
+        import ipdb; ipdb.set_trace()
         resp.hal.links.should_not.be.empty
-        for topic in resp.json['_embedded']['ea:topic']:
-            assert (   'security' in topic['description'].lower()
-                    or 'security' in topic['title'].lower()
-                   )
-        resp = testapi.get('/api/tests/topics?q=thereisnosuchword')
-        assert len(resp.json['_embedded']['ea:topic']) == 0
-
-    @pytest.mark.usefixtures('db')
-    def test_single_topic(self, db, testapi):
-        resp = testapi.get('/api/tests/topics/11')
-        resp.hal.links.should_not.be.empty
-        assert resp.json["id"] == 11
-        assert 'title' in resp.json
-        assert 'description' in resp.json
-        assert 'objective' in resp.json
-        assert 'agency' in resp.json
-        assert 'topic_number' in resp.json
-        assert 'solicitation_id' in resp.json
-        assert 'url' in resp.json
-        assert 'program' in resp.json
-        assert 'pre_release_date' in resp.json
-        assert 'proposals_begin_date' in resp.json
-        assert 'proposals_end_date' in resp.json
-        assert 'days_to_close' in resp.json
-        assert 'status' in resp.json
-        assert 'areas' in resp.json
-        assert isinstance(resp.json["areas"], list)
-        assert 'phases' in resp.json
-        assert isinstance(resp.json["phases"], list)
-        assert 'references' in resp.json
-        assert isinstance(resp.json["references"], list)
-        assert 'keywords' in resp.json
-        assert isinstance(resp.json["keywords"], list)
-
-
-    @pytest.mark.usefixtures('db')
-    def test_result_limit(self, db, testapi):
-        # test limiting to two records
-        resp = testapi.get('/api/tests/topics?limit=2')
-        assert len(resp.json['_embedded']['ea:topic']) == 2
-
-        # test default limit
-        # default limit is actually 20, but our test data set is not that large
-        resp = testapi.get('/api/tests/topics')
-        assert len(resp.json['_embedded']['ea:topic']) >= 10
-
-        # reject excessive demand for one... million... records
-        with pytest.raises(Exception):
-            resp = testapi.get('/api/tests/topics?limit=1000000')
-
-        # reject nonsensical limit
-        with pytest.raises(Exception):
-            resp = testapi.get('/api/tests/topics?limit=-34.2')
-
-    @pytest.mark.usefixtures('db')
-    def test_result_start(self, db, testapi):
-        resp1 = testapi.get('/api/tests/topics?start=1&limit=6')
-        resp2 = testapi.get('/api/tests/topics?start=4&limit=3')
-        assert resp2.json['_embedded']['ea:topic'] == resp1.json['_embedded']['ea:topic'][3:]
-
-        # reject negative start point
-        with pytest.raises(Exception):
-            resp = testapi.get('/api/tests/topics?start=-22')
-
-        # excessive start permitted, but no records result
-        resp = testapi.get('/api/tests/topics?start=1000000')
-        assert len(resp.json['_embedded']['ea:topic']) == 0
-
-    @pytest.mark.usefixtures('db')
-    def test_numFound(self, db, testapi):
-        all_results = testapi.get('/api/tests/topics?start=1&limit=6')
-        assert 'numFound' in all_results.json
-        assert all_results.json['numFound'] >= 10
-
-        some_results = testapi.get('/api/tests/topics?q=temperature&limit=100')
-        assert (some_results.json['numFound'] ==   
-                len(some_results.json['_embedded']['ea:topic']))
-
-    @pytest.mark.usefixtures('db')
-    def test_links_present(self, db, testapi):
-        results = testapi.get('/api/tests/topics?start=1&limit=6')
-        assert '_links' in results.json
-
-        assert 'self' in results.json['_links']
-        selflink = results.json['_links']['self']['href']
-        assert '/topics' in selflink
-        assert 'limit=6' in selflink
-
-        assert 'prev' not in results.json['_links']
-
-        assert 'next' in results.json['_links']
-        assert 'start=7' in results.json['_links']['next']['href']
-
-        results = testapi.get('/api/tests/topics?start=7&limit=6')
-        assert 'prev' in results.json['_links']
-        assert 'start=1' in results.json['_links']['prev']['href']
-
-    @pytest.mark.usefixtures('db')
-    def test_links_url_encoded(self, db, testapi):
-        results = testapi.get('/api/tests/topics?q=test software')
-        assert 'test+software' in results.json['_links']['self']['href']
-
-    @pytest.mark.usefixtures('db')
-    def test_sort_order(self, db, testapi):
-        asc = testapi.get('/api/tests/topics?order=asc')
-        desc = testapi.get('/api/tests/topics?order=desc')
-        assert desc.json['numFound'] >= 10
-        assert asc.json['numFound'] == desc.json['numFound']
-        assert asc.json['_embedded']['ea:topic'][0] != desc.json['_embedded']['ea:topic'][0]
-        # these tests don't work b/c Python and PostgreSQL disagree on whether 'AF15-AT25  (AirForce)' > 'AF151-190  (AirForce)'
-        # need to check that element 0 of ASC matches element -1 of DESC, but that will fail vs. the production dataset
-        # until we can establish a filter that generates 1 < n < max limit rows for both test and production datasets
-        #
-        # assert asc.json['_embedded']['ea:topic'][0]['topic_number'] < asc.json['_embedded']['ea:topic'][1]['topic_number']
-        # assert desc.json['_embedded']['ea:topic'][0]['topic_number'] > desc.json['_embedded']['ea:topic'][1]['topic_number']
 
 
 class TestAPILoggingIn:
@@ -228,4 +112,13 @@ class TestAPILoggingIn:
         assert resp.status_code == 400
         assert resp.json['error'] == 'Invalid JWT'
         assert resp.json['description'] == 'Invalid secret'
+
+class TestAPICreatingUser:
+
+    def test_user_created(self, testapi):
+        data = dict(email="jane.shepard@normandysr2.alliance.mil",
+                    password="15omnigel")
+        resp = testapi.put_json('user', data)
+        assert "id" in resp.json
+        assert resp.status_code == 200
 
