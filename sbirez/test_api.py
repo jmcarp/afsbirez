@@ -694,14 +694,14 @@ class WorkflowTests(APITestCase):
     def test_workflow_included(self):
         response = self.client.get('/api/v1/workflows/')
         self.assertGreater(response.data["count"], 0)
-        self.assertEqual(response.data["results"][0]['name'], 
+        self.assertEqual(response.data["results"][0]['name'],
                          'dod_proposal_info')
 
     # Check that fixture result includes questions
     def test_questions_included_in_workflow(self):
         response = self.client.get('/api/v1/workflows/')
         self.assertGreater(response.data["count"], 0)
-        self.assertEqual(response.data["results"][0]['name'], 
+        self.assertEqual(response.data["results"][0]['name'],
                          'dod_proposal_info')
 
     def test_get_single_workflow(self):
@@ -717,12 +717,12 @@ class PersonTests(APITestCase):
     # Check that the proposal index loads
     def test_person_view_set(self):
         response = self.client.get('/api/v1/persons/')
-        self.assertEqual(status.HTTP_200_OK, response.status_code)  
+        self.assertEqual(status.HTTP_200_OK, response.status_code)
         self.assertEqual(response.data["count"], 1)
 
     def test_single_person_get(self):
         response = self.client.get('/api/v1/persons/1/')
-        self.assertEqual(status.HTTP_200_OK, response.status_code)  
+        self.assertEqual(status.HTTP_200_OK, response.status_code)
         self.assertEqual(response.data['name'], 'Leia Organa')
         self.assertEqual(response.data['title'], 'Princess')
 
@@ -734,7 +734,7 @@ class AddressTests(APITestCase):
     # Check that the proposal index loads
     def test_address_view_set(self):
         response = self.client.get('/api/v1/addresses/')
-        self.assertEqual(status.HTTP_200_OK, response.status_code)  
+        self.assertEqual(status.HTTP_200_OK, response.status_code)
         self.assertEqual(response.data["count"], 2)
 
 
@@ -759,7 +759,7 @@ class ProposalTests(APITestCase):
         user = _fixture_user(self)
 
         response = self.client.get('/api/v1/proposals/2/')
-        self.assertEqual(status.HTTP_200_OK, response.status_code) 
+        self.assertEqual(status.HTTP_200_OK, response.status_code)
         self._deserialize_data(response)
         self.assertEqual(response.data["data"]["quest_thy_name"],
             'Galahad')
@@ -770,16 +770,16 @@ class ProposalTests(APITestCase):
         response = self.client.get('/api/v1/proposals/2/')
         self._deserialize_data(response)
         self.assertEqual(response.data['data']['quest_thy_favorite_color'],
-            'yellow')  
-        
+            'yellow')
+
         response.data['data']['quest_thy_favorite_color'] = 'green'
         response.data['data'] = json.dumps(response.data['data'])
         response = self.client.put('/api/v1/proposals/2/', response.data)
         self.assertEqual(status.HTTP_200_OK, response.status_code)
-        
-        response = self.client.get('/api/v1/proposals/2/')  
+
+        response = self.client.get('/api/v1/proposals/2/')
         self._deserialize_data(response)
-        self.assertEqual(response.data['data']['quest_thy_favorite_color'], 
+        self.assertEqual(response.data['data']['quest_thy_favorite_color'],
             'green')
 
     def test_bad_update_proposal(self):
@@ -791,28 +791,44 @@ class ProposalTests(APITestCase):
         response.data['data'] = json.dumps(response.data['data'])
         response = self.client.put('/api/v1/proposals/2/', response.data)
         self.assertEqual(status.HTTP_400_BAD_REQUEST, response.status_code)
-        self.assertIn('quest_thy_favorite_color: Lancelot already said blue', 
+        self.assertIn('quest_thy_favorite_color: Lancelot already said blue',
                       response.data['non_field_errors'])
 
     # omit a required field
     def test_incomplete_post_raises_error(self):
         user = _fixture_user(self)
 
-        response = self.client.post('/api/v1/proposals/', 
-            {'owner': 2, 'firm': 1, 'workflow': 2, 
+        response = self.client.post('/api/v1/proposals/',
+            {'owner': 2, 'firm': 1, 'workflow': 2,
+             'title': 'Quest for the Holy Grail',
              'topic': 1, 'data': json.dumps(
                     {
                      "quest_thy_quest": "To seek the Grail",
                      "quest_thy_favorite_color": "#0000FF"})
             })
-        self.assertIn('Required field quest_thy_name absent', 
+        self.assertIn('Required field quest_thy_name absent',
                       response.data['non_field_errors'])
+
+    # omit a required field, but with /partial
+    def test_intentionally_incomplete_post(self):
+        user = _fixture_user(self)
+
+        response = self.client.post('/api/v1/proposals/partial/',
+            {'owner': 2, 'firm': 1, 'workflow': 2,
+             'title': 'Quest for the Holy Grail',
+             'topic': 1, 'data': json.dumps(
+                    {
+                     "quest_thy_quest": "To seek the Grail",
+                     "quest_thy_favorite_color": "#0000FF"})
+            })
+        self.assertEqual(status.HTTP_201_CREATED, response.status_code)
 
     def test_post_full_proposal(self):
         user = _fixture_user(self)
 
-        response = self.client.post('/api/v1/proposals/', 
-            {'owner': 2, 'firm': 1, 'workflow': 2, 
+        response = self.client.post('/api/v1/proposals/',
+            {'owner': 2, 'firm': 1, 'workflow': 2,
+             'title': 'Quest for the Holy Grail',
              'topic': 1, 'data': json.dumps(
                     {"quest_thy_name": "Galahad",
                      "quest_thy_quest": "To seek the Grail",
@@ -823,6 +839,5 @@ class ProposalTests(APITestCase):
         response = self.client.get('/api/v1/proposals/%s/' % response.data['id'])
         self.assertEqual(status.HTTP_200_OK, response.status_code)
         self._deserialize_data(response)
-        self.assertEqual(response.data['data']['quest_thy_favorite_color'], 
+        self.assertEqual(response.data['data']['quest_thy_favorite_color'],
             "#0000FF")
-

@@ -206,16 +206,17 @@ class WorkflowSerializer(serializers.ModelSerializer):
         fields = ('name', 'validation', 'questions', )
 
 
-def _validate_question(data, question):
+def _validate_question(data, question, accept_partial=False):
 
-    if question.required and not question.subworkflow:
-        if (question.name not in data):
-            raise serializers.ValidationError(
-                'Required field %s absent' % question.name)
-        if (hasattr(data[question.name], 'strip') and
-            not data[question.name].strip()):
-            raise serializers.ValidationError(
-                'Required field %s absent' % question.name)
+    if not accept_partial:
+        if question.required and not question.subworkflow:
+            if (question.name not in data):
+                raise serializers.ValidationError(
+                    'Required field %s absent' % question.name)
+            if (hasattr(data[question.name], 'strip') and
+                not data[question.name].strip()):
+                raise serializers.ValidationError(
+                    'Required field %s absent' % question.name)
 
     if question.validation:
         for validation in question.validation.split(';'):
@@ -236,12 +237,11 @@ def _validate_question(data, question):
 
     if question.subworkflow:
         for subquestion in question.subworkflow.questions.all():
-            _validate_question(data, subquestion)
+            _validate_question(data, subquestion, accept_partial)
 
     # TODO: gather all the validation errors
-    # TODO: allow validate-but-not-check-required, no-validate
 
-def genericValidator(proposal):
+def genericValidator(proposal, accept_partial=False):
     '''
     Inspect the workflow's validators and apply them to
     the proposal's data
@@ -249,7 +249,12 @@ def genericValidator(proposal):
     data = json.loads(proposal['data'])
 
     for question in proposal['workflow'].questions.all():
-        _validate_question(data, question)
+        _validate_question(data, question, accept_partial=accept_partial)
+
+    return proposal
+
+def partialPermissiveValidator(proposal):
+    return genericValidator(proposal, accept_partial=True)
 
 
 class ProposalSerializer(serializers.ModelSerializer):
@@ -258,9 +263,12 @@ class ProposalSerializer(serializers.ModelSerializer):
         model = Proposal
         validators = [genericValidator]
 
-    # def validate(self, attrs):
-        # TODO: use self.context['request'].method (?) to toggle validation
-        # return the validated data: genericValidator(proposal=attrs)
+
+class PartialProposalSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Proposal
+        validators = [partialPermissiveValidator]
 
 
 class AddressSerializer(serializers.ModelSerializer):
