@@ -206,16 +206,18 @@ class WorkflowSerializer(serializers.ModelSerializer):
         fields = ('name', 'validation', 'questions', )
 
 
-def _validate_question(data, question, accept_partial=False):
+def _find_validation_errors(data, question, accept_partial, ):
+
+    errors = []
 
     if not accept_partial:
         if question.required and not question.subworkflow:
             if (question.name not in data):
-                raise serializers.ValidationError(
+                errors.append(
                     'Required field %s absent' % question.name)
-            if (hasattr(data[question.name], 'strip') and
+            elif (hasattr(data[question.name], 'strip') and
                 not data[question.name].strip()):
-                raise serializers.ValidationError(
+                errors.append(
                     'Required field %s absent' % question.name)
 
     if question.validation:
@@ -232,14 +234,14 @@ def _validate_question(data, question, accept_partial=False):
                 continue
             if question.name in data:
                 if not func(data, data[question.name], *args):
-                    raise serializers.ValidationError(
+                    errors.append(
                         '%s: %s' % (question.name, question.validation_msg))
 
     if question.subworkflow:
         for subquestion in question.subworkflow.questions.all():
-            _validate_question(data, subquestion, accept_partial)
+            errors.extend(_find_validation_errors(data, subquestion, accept_partial))
 
-    # TODO: gather all the validation errors
+    return errors
 
 def genericValidator(proposal, accept_partial=False):
     '''
@@ -248,8 +250,11 @@ def genericValidator(proposal, accept_partial=False):
     '''
     data = json.loads(proposal['data'])
 
+    errors = []
     for question in proposal['workflow'].questions.all():
-        _validate_question(data, question, accept_partial=accept_partial)
+        errors.extend(_find_validation_errors(data, question, accept_partial=accept_partial))
+    if errors:
+        raise serializers.ValidationError(errors)
 
     return proposal
 
@@ -257,14 +262,28 @@ def partialPermissiveValidator(proposal):
     return genericValidator(proposal, accept_partial=True)
 
 
+class CurrentFirmDefault(serializers.CurrentUserDefault):
+
+    def __call__(self):
+        return self.user.firm
+
+
 class ProposalSerializer(serializers.ModelSerializer):
+
+    owner = serializers.PrimaryKeyRelatedField(
+        read_only = True,
+        default = serializers.CurrentUserDefault())
+
+    firm = serializers.PrimaryKeyRelatedField(
+        read_only = True,
+        default = CurrentFirmDefault())
 
     class Meta:
         model = Proposal
         validators = [genericValidator]
 
 
-class PartialProposalSerializer(serializers.ModelSerializer):
+class PartialProposalSerializer(ProposalSerializer):
 
     class Meta:
         model = Proposal
