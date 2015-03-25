@@ -228,12 +228,12 @@ def _find_validation_errors(data, question, accept_partial, ):
                 func = getattr(validation_helpers, function_name)
             except AttributeError:
                 # validation refers to a function not found in helper library
-                # raise serializers.ValidationError(
-                #    '%s: validation function %s absent from validation_helpers.py',
-                #    question.name, function_name)
-                continue
+                errors.append(
+                    '%s: validation function %s absent from validation_helpers.py',
+                    (question.name, function_name))
             if question.name in data:
-                if not func(data, data[question.name], *args):
+                datum = data[question.name].lower()
+                if not func(data, datum, *args):
                     errors.append(
                         '%s: %s' % (question.name, question.validation_msg))
 
